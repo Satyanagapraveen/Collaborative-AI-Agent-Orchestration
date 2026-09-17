@@ -6,6 +6,7 @@ from uuid import UUID
 from src.db.database import get_db
 from src.db.models import Task
 from src.api.schemas import TaskRequest, TaskResponse
+from src.worker.tasks import run_agent_workflow
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["Tasks"])
 
@@ -17,6 +18,8 @@ async def create_task(request:TaskRequest, db:AsyncSession=Depends(get_db)):
     await db.refresh(new_task)
 
     # TODO: In Phase 3, we will trigger the Celery worker here
+     # Dispatch to Celery
+    run_agent_workflow.delay(str(new_task.id), request.prompt)
     
     return new_task
 
