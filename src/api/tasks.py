@@ -23,7 +23,7 @@ async def create_task(request:TaskRequest, db:AsyncSession=Depends(get_db)):
 @router.get("/{task_id}",response_model=TaskResponse)
 async def get_task(task_id: UUID, db:AsyncSession=Depends(get_db)):
     result= await db.execute(select(Task).where(Task.id==task_id))
-    task=result.scalar().first()
+    task=result.scalars().first()
     if not task:
         return HTTPException(status_code=404, detail="Task not found")
     return task
