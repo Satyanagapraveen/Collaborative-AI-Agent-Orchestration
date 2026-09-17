@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy.types import Text, Column, String, DateTime
+from sqlalchemy import Text, Column, String, DateTime
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
 from src.db.database import Base
