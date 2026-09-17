@@ -3,6 +3,10 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
+class AgentLogScheam(BaseModel):
+    agent: str
+    action: str
+    timestamp: datetime
 class TaskRequest(BaseModel):
     prompt: str
 
@@ -11,7 +15,7 @@ class TaskResponse(BaseModel):
     prompt: str
     status: str
     result: Optional[str]=None
-    agent_logs: Optional[List[dict[str,Any]]]=None
+    agent_logs: Optional[List[AgentLogScheam]]=None
     created_at: datetime
     updated_at: datetime
 
