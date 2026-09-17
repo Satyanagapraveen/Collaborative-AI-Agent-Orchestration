@@ -3,3 +3,5 @@ uvicorn[standard]
 asyncpg
 sqlalchemy
 python-dotenv
+celery
+redis

@@ -35,6 +35,20 @@ services:
       condition: service_healthy
      redis:
       condition: service_healthy
+
+  worker:
+   build: .
+   command: celery -A src.worker.celery_app worker --loglevel=info
+   volumes:
+     - .:/api
+   env_file:
+     - .env
+   depends_on:
+     redis:
+      condition: service_healthy
+     db:
+      condition: service_healthy
+
     
 volumes:
   postgres_data:
