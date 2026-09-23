@@ -7,3 +7,4 @@ celery
 redis
 langchain-core
 langchain-google-genai
+langgraph

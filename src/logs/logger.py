@@ -3,7 +3,7 @@ import os
 import logging
 from datetime import datetime, timezone
 
-log_dir=os.path.join(os.getcwd,"logs")
+log_dir=os.path.join(os.getcwd(),"logs")
 os.makedirs(log_dir, exist_ok=True)
 log_file_path=os.path.join(log_dir,"agent_activity.log")
 

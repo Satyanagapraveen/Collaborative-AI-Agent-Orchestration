@@ -5,7 +5,7 @@ from src.agents.nodes import research_agent, writing_agent
 workflow=StateGraph(AgentState)
 workflow.add_node("researcher",research_agent)
 workflow.add_node("writer",writing_agent)
-workflow.set_entrypoint("researcher")
+workflow.set_entry_point("researcher")
 def check_research_status(state:AgentState):
     if state.get("status")=="FAILED":
         return END
@@ -17,4 +17,4 @@ workflow.add_conditional_edges(
 )    
 
 workflow.add_edge("writer",END)
-agent_worklow=workflow.compile()
+agent_app=workflow.compile()
