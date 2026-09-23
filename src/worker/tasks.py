@@ -27,7 +27,10 @@ def run_agent_workflow(task_id: str, prompt: str):
             }
             
             try:
-                final_state = await agent_app.ainvoke(initial_state)
+                final_state = await agent_app.ainvoke(
+                    initial_state,
+                    config={"configurable": {"thread_id": task_id}}
+                )
                 
                 task.status = final_state.get("status", "FAILED")
                 if task.status == "FAILED":

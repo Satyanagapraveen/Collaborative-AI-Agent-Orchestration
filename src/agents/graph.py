@@ -1,4 +1,5 @@
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 from src.agents.state import AgentState
 from src.agents.nodes import research_agent, writing_agent
 
@@ -17,4 +18,8 @@ workflow.add_conditional_edges(
 )    
 
 workflow.add_edge("writer",END)
-agent_app=workflow.compile()
+memory=MemorySaver()
+agent_app=workflow.compile(
+     checkpointer=memory,
+    interrupt_before=["writer"]
+)
