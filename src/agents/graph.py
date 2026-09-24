@@ -20,6 +20,5 @@ workflow.add_conditional_edges(
 workflow.add_edge("writer",END)
 memory=MemorySaver()
 agent_app=workflow.compile(
-     checkpointer=memory,
-    interrupt_before=["writer"]
+     checkpointer=memory
 )

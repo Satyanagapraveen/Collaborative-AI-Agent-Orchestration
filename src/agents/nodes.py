@@ -35,7 +35,7 @@ def writing_agent(state: AgentState) -> dict:
     workspace_data = read_from_scratchpad(task_id)
     research_data = workspace_data.get("research_data", "")
     
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0, api_key=os.getenv("LLM_API_KEY"))
+    llm = ChatGoogleGenerativeAI(model=os.getenv("LLM_MODEL"), temperature=0, api_key=os.getenv("LLM_API_KEY"))
     
     messages = [
         SystemMessage(content="You are a senior technical writer. Summarize the provided research concisely."),

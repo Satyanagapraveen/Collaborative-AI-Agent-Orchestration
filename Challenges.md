@@ -166,3 +166,61 @@ This works when your tasks are organized under a package structure and you want 
 - Import errors like this usually mean a wrong module was used.
 - For SQLAlchemy, the correct pattern is to import Column from sqlalchemy, and data types from sqlalchemy or the specific dialect package when needed.
 - Celery task registration errors happen when the worker does not import the task module. The fix is to register the task with include or autodiscover_tasks.
+
+---
+
+## Challenge 4:
+
+asyncpg InterfaceError: "cannot perform operation: another operation is in progress"
+
+### Error logs when I try to run or do something
+
+sqlalchemy.exc.InterfaceError: (sqlalchemy.dialects.postgresql.asyncpg.InterfaceError) <class 'asyncpg.exceptions.\_base.InterfaceError'>: cannot perform operation: another operation is in progress
+
+[SQL: SELECT tasks.id, tasks.prompt, tasks.status, tasks.result, tasks.agent_logs, tasks.created_at, tasks.updated_at
+
+FROM tasks
+
+WHERE tasks.id = $1::UUID]
+
+[parameters: ('8b00bdc4-e5a9-4953-b25b-a53878d6ba89',)]
+
+##(Background on this error at: https://sqlalche.me/e/20/rvf5)
+
+Trace shows SQLAlchemy/asyncpg raised the InterfaceError while trying to start a transaction for a SELECT — the underlying message from asyncpg is that the connection was already executing another operation.
+
+### Problem
+
+asyncpg (the async Postgres driver) does not allow overlapping operations on the same physical connection. This error means your code attempted to run a DB operation while a previous operation was still in progress on the same connection/session. Common causes:
+
+- sharing a single `AsyncSession` or connection across concurrent coroutines
+- holding a transaction open while doing long non-DB work (sleeps, external I/O) and then attempting more DB work on the same session
+- reusing session/connection objects across thread/worker boundaries (Celery tasks vs API coroutines)
+
+In this project the worker `run_agent_workflow` created DB work while also invoking async orchestration (`agent_app.ainvoke`) and used the same session/connection for multiple awaits. The fix implemented was to create an isolated engine + session for the task so the task gets its own dedicated connection.
+
+### Fix (what I implemented)
+
+I created a brand-new isolated async engine and sessionmaker for each Celery task run, used that session for all DB work inside the task, and disposed the engine when finished. Key points from the implementation:
+
+- Create an isolated async engine using `create_async_engine(os.getenv("DATABASE_URL"))` inside the task function.
+- Build a dedicated `async_sessionmaker(engine, expire_on_commit=False)` and `async with` that session for all DB calls in the workflow.
+- Commit and close the session before long non-DB waits, and `await engine.dispose()` in `finally` to clean up connections.
+
+This prevents concurrent operations from colliding on a shared connection because each task gets its own connection pool/engine.
+
+### Alternative / better patterns
+
+- Prefer creating a shared `Engine` once (module-level) and then making isolated sessions per task: `async_sessionmaker(shared_engine)` — this reuses the connection pool while guaranteeing each task uses its own session/connection.
+- Ensure transactions are short: commit or close the session before long sleeps or network calls.
+- If you must run concurrent DB queries within one coroutine, use separate sessions for each concurrent subtask.
+
+---
+
+## Lesson learned
+
+- PostgreSQL connection issues usually mean a missing database driver or a wrong database URL format.
+- Import errors like this usually mean a wrong module was used.
+- For SQLAlchemy, the correct pattern is to import Column from sqlalchemy, and data types from sqlalchemy or the specific dialect package when needed.
+- Celery task registration errors happen when the worker does not import the task module. The fix is to register the task with include or autodiscover_tasks.
+- asyncpg InterfaceError typically indicates overlapping DB operations on the same connection; use isolated sessions/connections and keep transactions short.
