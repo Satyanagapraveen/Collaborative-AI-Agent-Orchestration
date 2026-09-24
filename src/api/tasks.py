@@ -1,3 +1,6 @@
+import os
+import redis
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -31,27 +34,38 @@ async def get_task(task_id: UUID, db:AsyncSession=Depends(get_db)):
         return HTTPException(status_code=404, detail="Task not found")
     return task
 
-@router.post("/{task_id}/approve", response_model=TaskResponse)
+redis_client = redis.from_url(os.getenv("REDIS_URL"))
+
+@router.post("/{task_id}/approve")
 async def approve_task(task_id: UUID, db: AsyncSession = Depends(get_db)):
-    # 1. Find the task in the database
+    # 1. Verify the task exists and is waiting for approval
     result = await db.execute(select(Task).where(Task.id == task_id))
     task = result.scalars().first()
     
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
         
-    # 2. Ensure it is actually waiting for approval
     if task.status != "AWAITING_APPROVAL":
         raise HTTPException(
             status_code=400, 
             detail=f"Task is in status {task.status}, not AWAITING_APPROVAL"
         )
         
-    # 3. The human has approved it! Mark it as completed.
-    task.status = "COMPLETED"
+    # 2. Retrieve the final draft from the Redis scratchpad
+    redis_key = f"task:{str(task_id)}:workspace"
+    workspace_data_raw = redis_client.get(redis_key)
     
-    # In a fully resumed LangGraph, we would trigger Celery here again 
-    # to run the final "Publish" node. For this spec, marking it completed finishes the flow.
+    if workspace_data_raw:
+        workspace_data = json.loads(workspace_data_raw)
+        draft = workspace_data.get("draft", "No draft found in scratchpad.")
+        # 3. Save the draft permanently to the Postgres result column
+        task.result = draft
+    else:
+        # Fallback if Redis data expired or went missing
+        task.result = "Error: Workspace data expired or not found."
+
+    # 4. Mark as completed and save
+    task.status = "COMPLETED"
     
     await db.commit()
     await db.refresh(task)
