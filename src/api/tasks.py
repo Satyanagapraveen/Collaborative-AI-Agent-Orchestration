@@ -91,3 +91,7 @@ async def websocket_task_status(websocket: WebSocket, task_id: UUID):
             
     except WebSocketDisconnect:
         await pubsub.unsubscribe(channel_name)
+        # --- NEW: Catch the server shutdown signal ---
+    except asyncio.CancelledError:
+        await pubsub.unsubscribe(channel_name)
+        raise

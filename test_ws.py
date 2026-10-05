@@ -1,27 +1,32 @@
 import asyncio
 import websockets
-import sys
+import requests
 
-async def listen_to_task(task_id:str):
-    uri=f"ws://localhost:8000/api/v1/tasks/{task_id}"
-    print(f"Connecting to the {uri}")
+async def create_and_listen():
+    # 1. Automatically create the task
+    print("Creating new task...")
+    response = requests.post(
+        "http://localhost:8000/api/v1/tasks",
+        json={"prompt": "Explain race conditions in computer science."}
+    )
+    task_data = response.json()
+    task_id = task_data["id"]
+    print(f"Task created with ID: {task_id}")
+
+    # 2. Instantly connect to the WebSocket bridge
+    uri = f"ws://localhost:8000/api/v1/tasks/{task_id}"
+    print(f"Connecting to {uri}...")
+    
     try:
-         async with websockets.connect(uri) as websocket:
-              print("Connection Open. Listening for updates.")
-              while True:
-                   message = await websocket.recv()
-                   print(f"Update received: {message}")
-    except websockets.exceptions.WebSocketException as e:
-         print("Server closed the connection")
+        async with websockets.connect(uri) as websocket:
+            print("Connection open. Listening for updates...")
+            while True:
+                message = await websocket.recv()
+                print(f"Update Received: {message}")
+    except websockets.exceptions.ConnectionClosed:
+        print("Server closed the connection.")
     except Exception as e:
-         print(f"Error:{e}")
+        print(f"Error: {e}")
 
-if __name__=="__main__":
-     if len(sys.argv)<2:
-          print("Error: you must provide a task ID")
-          sys.exit(1)
-     task_id=sys.argv[1]
-     asyncio.run(listen_to_task(task_id))
-
-
-        
+if __name__ == "__main__":
+    asyncio.run(create_and_listen())

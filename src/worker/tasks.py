@@ -28,6 +28,8 @@ def run_agent_workflow(task_id: str, prompt: str):
             
             if not task:
                 return
+            # --- NEW: Add a delay to let the WebSocket connect ---
+            await asyncio.sleep(1.5)
             
             task.status = "RUNNING"
             await session.commit()

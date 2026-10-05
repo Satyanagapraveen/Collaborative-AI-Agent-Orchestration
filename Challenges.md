@@ -217,6 +217,123 @@ This prevents concurrent operations from colliding on a shared connection becaus
 
 ---
 
+## Challenge 5:
+
+SQLAlchemy asyncio module missing dependency: greenlet
+
+### Error logs when I try to run or do something
+
+Traceback (most recent call last):
+
+File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/concurrency.py", line 70, in \_initialize
+
+from greenlet import getcurrent
+
+ModuleNotFoundError: No module named 'greenlet'
+
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+
+File "/usr/local/bin/celery", line 8, in <module>
+
+sys.exit(main())
+
+File "/api/src/worker/tasks.py", line 5, in <module>
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+File "/usr/local/lib/python3.11/site-packages/sqlalchemy/ext/asyncio/**init**.py", line 28, in <module>
+
+concurrency.\_concurrency_shim.\_initialize()
+
+File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/concurrency.py", line 79, in \_initialize
+
+raise ImportError(\_ERROR_MESSAGE) from e
+
+ImportError: The SQLAlchemy asyncio module requires that the Python 'greenlet' library is installed. In order to ensure this dependency is available, use the 'sqlalchemy[asyncio]' install target: 'pip install sqlalchemy[asyncio]'
+
+### Problem
+
+We were using SQLAlchemy's async features (`create_async_engine`, `async_sessionmaker`) inside Celery workers. SQLAlchemy's asyncio support depends on a package called `greenlet`. The worker booted, imported the async SQLAlchemy module, and immediately detected that `greenlet` was missing. This is not a PostgreSQL problem; it is a Python dependency problem for SQLAlchemy async support.
+
+### Fix
+
+Update the dependency list so Docker installs the async support for SQLAlchemy. In this project, the fix is to add the extra dependency in `requirements.txt`:
+
+sqlalchemy[asyncio]
+
+This tells pip to install `greenlet` automatically along with SQLAlchemy's async support.
+
+We also needed to rebuild the container so the new dependency gets installed:
+
+```bash
+docker-compose up --build -d
+```
+
+### What greenlet is
+
+SQLAlchemy was originally built as a mostly synchronous library. When async Python became common, the library needed a way to bridge its older sync internals with the new async database driver. That bridge is `greenlet`.
+
+`greenlet` enables Python code to pause in one context and resume in another, so SQLAlchemy can coordinate async behavior without rewriting the entire framework. Without it, SQLAlchemy's async engine module cannot initialize correctly, and `create_async_engine` fails early.
+
+### Lesson learned
+
+- PostgreSQL connection issues usually mean a missing database driver or a wrong database URL format.
+- Import errors like this usually mean a wrong module was used.
+- For SQLAlchemy async work, the missing dependency may be `greenlet`, not just `asyncpg`.
+- Always install SQLAlchemy async extras when using `create_async_engine` and async sessions.
+- For Docker-based projects, rebuild the image after updating `requirements.txt` so the dependency is actually installed.
+
+---
+
+## Challenge 6:
+
+FastAPI reload triggered a deadlock because the WebSocket loop did not stop gracefully
+
+### Error logs when I try to run or do something
+
+```bash
+python test_ws.py
+Creating new task...
+```
+
+Docker logs:
+
+```text
+INFO:     connection open
+api
+INFO:     172.29.0.1:41478 - "POST /api/v1/tasks/a1e6c2fe-5117-4c6e-9080-f593536343d7/approve HTTP/1.1" 200 OK
+worker
+[2026-10-05 05:31:43,393: INFO/MainProcess] Task resume_agent_workflow[1eb80161-0b4f-4852-98a8-97f3eb10a4fd] received
+[2026-10-05 05:31:43,436: INFO/ForkPoolWorker-15] Human approval received. Publishing final result.
+[2026-10-05 05:31:43,450: INFO/ForkPoolWorker-15] Task resume_agent_workflow[1eb80161-0b4f-4852-98a8-97f3eb10a4fd] succeeded in 0.055953772999600915s: None
+api
+WARNING:  WatchFiles detected changes in 'test_ws.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for background tasks to complete. (CTRL+C to force quit)
+```
+
+### Problem
+
+The server was reloading because Docker detected a file change. During reload, FastAPI began shutdown. But the WebSocket loop in `websocket_task_status` kept running forever in a `while True` loop and did not catch the shutdown signal. Because of that, the server got stuck in a shutdown state and could not complete the request cleanly. The client script appeared to hang at `Creating new task...` because the server never responded.
+
+### Fix
+
+Add graceful shutdown handling in the WebSocket endpoint. The key fix is to catch `asyncio.CancelledError` (and still unsubscribe from Redis), then break the loop cleanly.
+
+Example:
+
+```python
+            await asyncio.sleep(0.1)
+    except WebSocketDisconnect:
+        await pubsub.unsubscribe(channel_name)
+    except asyncio.CancelledError:
+        await pubsub.unsubscribe(channel_name)
+        raise
+```
+
+This prevents the WebSocket loop from keeping the server alive during shutdown, so the app can reload cleanly without deadlocking.
+
+---
+
 ## Lesson learned
 
 - PostgreSQL connection issues usually mean a missing database driver or a wrong database URL format.
@@ -224,3 +341,5 @@ This prevents concurrent operations from colliding on a shared connection becaus
 - For SQLAlchemy, the correct pattern is to import Column from sqlalchemy, and data types from sqlalchemy or the specific dialect package when needed.
 - Celery task registration errors happen when the worker does not import the task module. The fix is to register the task with include or autodiscover_tasks.
 - asyncpg InterfaceError typically indicates overlapping DB operations on the same connection; use isolated sessions/connections and keep transactions short.
+- SQLAlchemy async support requires `greenlet`; install `sqlalchemy[asyncio]` or `greenlet` explicitly.
+- WebSocket loops must handle shutdown and cancellation gracefully; otherwise a server reload can hang and look like a deadlock.
