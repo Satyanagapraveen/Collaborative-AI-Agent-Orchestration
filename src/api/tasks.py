@@ -1,7 +1,9 @@
 import os
 import redis
 import json
-from fastapi import APIRouter, Depends, HTTPException
+import redis.asyncio as aioredis
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
@@ -15,6 +17,9 @@ from src.api.schemas import ApprovalRequest, ApprovalResponse
 from src.worker.tasks import resume_agent_workflow
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["Tasks"])
+redis_client = redis.from_url(os.getenv("REDIS_URL"))
+# Build an asynchronous client specifically for the WebSocket
+async_redis = aioredis.from_url(os.getenv("REDIS_URL"))
 
 @router.post("",response_model=TaskResponse, status_code=202)
 async def create_task(request:TaskRequest, db:AsyncSession=Depends(get_db)):
@@ -37,7 +42,6 @@ async def get_task(task_id: UUID, db:AsyncSession=Depends(get_db)):
         return HTTPException(status_code=404, detail="Task not found")
     return task
 
-redis_client = redis.from_url(os.getenv("REDIS_URL"))
 
 @router.post("/{task_id}/approve", response_model=ApprovalResponse)
 async def approve_task(task_id: UUID, approval: ApprovalRequest, db: AsyncSession = Depends(get_db)):
@@ -59,3 +63,25 @@ async def approve_task(task_id: UUID, approval: ApprovalRequest, db: AsyncSessio
     
     # 3. Return the exact response required by the spec
     return ApprovalResponse(task_id=task_id, status="RESUMED")
+
+@router.websocket("/ws/tasks/{task_id}")
+async def websocket_task_status(websocket:WebSocket, task_id:UUID):
+    await websocket.accept()
+    pubsub=aioredis.Redis.pubsub()
+    channel_name=f"task_updates{task_id}"
+    await pubsub.subscribe(channel_name)
+    try:
+        while True:
+            message=pubsub.get_message(ignore_subscribe_messages=True)
+            if message:
+                status_string=message["data"].decode("utf-8")
+                await websocket.send_json({
+                    "task_id": str(task_id),
+                    "status": status_string
+                })
+            # Pause for 100 milliseconds to prevent CPU overload
+            await asyncio.sleep(0.1)
+
+    except WebSocketDisconnect:
+        await pubsub.unsubscribe(channel_name)
+         
