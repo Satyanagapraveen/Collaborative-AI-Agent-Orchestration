@@ -11,6 +11,9 @@ from src.db.models import Task
 from src.api.schemas import TaskRequest, TaskResponse
 from src.worker.tasks import run_agent_workflow
 
+from src.api.schemas import ApprovalRequest, ApprovalResponse
+from src.worker.tasks import resume_agent_workflow
+
 router = APIRouter(prefix="/api/v1/tasks", tags=["Tasks"])
 
 @router.post("",response_model=TaskResponse, status_code=202)
@@ -36,9 +39,8 @@ async def get_task(task_id: UUID, db:AsyncSession=Depends(get_db)):
 
 redis_client = redis.from_url(os.getenv("REDIS_URL"))
 
-@router.post("/{task_id}/approve")
-async def approve_task(task_id: UUID, db: AsyncSession = Depends(get_db)):
-    # 1. Verify the task exists and is waiting for approval
+@router.post("/{task_id}/approve", response_model=ApprovalResponse)
+async def approve_task(task_id: UUID, approval: ApprovalRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Task).where(Task.id == task_id))
     task = result.scalars().first()
     
@@ -46,33 +48,14 @@ async def approve_task(task_id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Task not found")
         
     if task.status != "AWAITING_APPROVAL":
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Task is in status {task.status}, not AWAITING_APPROVAL"
-        )
-        
-    # 2. Retrieve the final draft from the Redis scratchpad
-    redis_key = f"task:{str(task_id)}:workspace"
-    workspace_data_raw = redis_client.get(redis_key)
+        raise HTTPException(status_code=400, detail="Task is not awaiting approval")
+
+    # 1. Strictly update the database to RESUMED per the spec
+    task.status = "RESUMED"
+    await db.commit()
     
-    if workspace_data_raw:
-        workspace_data = json.loads(workspace_data_raw)
-        draft = workspace_data.get("draft", "No draft found in scratchpad.")
-        
-        # --- NEW EXTRACTION LOGIC ---
-        if isinstance(draft, list):
-            # Extract the 'text' value from each dictionary in the list and join them
-            extracted_text = "".join([
-                item.get("text", "") for item in draft if isinstance(item, dict)
-            ])
-            draft = extracted_text
-        elif not isinstance(draft, str):
-            # Fallback: force any other weird data types into a string
-            draft = str(draft)
-        # ----------------------------
-        
-        # Now it is guaranteed to be a flat string, safe for PostgreSQL VARCHAR
-        task.result = draft
-    else:
-        # Fallback if Redis data expired or went missing
-        task.result = "Error: Workspace data expired or not found."
+    # 2. Trigger a NEW Celery task to actually continue the graph
+    resume_agent_workflow.delay(str(task_id), approval.approved, approval.feedback)
+    
+    # 3. Return the exact response required by the spec
+    return ApprovalResponse(task_id=task_id, status="RESUMED")

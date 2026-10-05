@@ -57,3 +57,53 @@ def run_agent_workflow(task_id: str, prompt: str):
                 await engine.dispose()
 
     asyncio.run(_execute_workflow())
+
+import json
+import redis
+from src.worker.celery_app import celery_app
+
+redis_client = redis.from_url(os.getenv("REDIS_URL"))
+
+@celery_app.task(name="resume_agent_workflow")
+def resume_agent_workflow(task_id: str, approved: bool, feedback: str):
+    async def _execute_resume():
+        engine = create_async_engine(os.getenv("DATABASE_URL"))
+        IsolatedSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+        async with IsolatedSessionLocal() as session:
+            result = await session.execute(select(Task).where(Task.id == task_id))
+            task = result.scalars().first()
+            if not task:
+                return
+
+            # 1. Update the LangGraph state with the human's feedback
+            config = {"configurable": {"thread_id": task_id}}
+            agent_app.update_state(
+                config,
+                {"human_approved": approved, "feedback": feedback}
+            )
+
+            # 2. Resume the graph (it will now run the publisher node)
+            final_state = await agent_app.ainvoke(None, config)
+
+            # 3. Extract the clean string from Redis and save to Postgres
+            redis_key = f"task:{task_id}:workspace"
+            workspace_data_raw = redis_client.get(redis_key)
+            if workspace_data_raw:
+                workspace_data = json.loads(workspace_data_raw)
+                draft = workspace_data.get("draft", "")
+                
+                if isinstance(draft, list):
+                    draft = "".join([item.get("text", "") for item in draft if isinstance(item, dict)])
+                elif not isinstance(draft, str):
+                    draft = str(draft)
+                    
+                task.result = draft
+            else:
+                task.result = "Error: Workspace data expired."
+
+            task.status = final_state.get("status", "COMPLETED")
+            await session.commit()
+            await engine.dispose()
+
+    asyncio.run(_execute_resume())

@@ -34,3 +34,9 @@
 {"timestamp": "2026-09-24T09:46:40.850593+00:00", "level": "INFO", "task_id": "fd8e4c3e-ce5c-482c-9e64-5484f5979f49", "agent_name": "ResearchAgent", "action_details": "Research saved to scratchpad."}
 {"timestamp": "2026-09-24T09:46:40.853594+00:00", "level": "INFO", "task_id": "fd8e4c3e-ce5c-482c-9e64-5484f5979f49", "agent_name": "WritingAgent", "action_details": "Starting draft generation."}
 {"timestamp": "2026-09-24T09:46:43.066155+00:00", "level": "INFO", "task_id": "fd8e4c3e-ce5c-482c-9e64-5484f5979f49", "agent_name": "WritingAgent", "action_details": "Draft generated and saved to scratchpad."}
+{"timestamp": "2026-10-05T03:01:43.287063+00:00", "level": "INFO", "task_id": "47091b39-8e4f-4e33-b301-4d8f807e1144", "agent_name": "ResearchAgent", "action_details": "start researching for: Explain the concept of Human-in-the-Loop AI."}
+{"timestamp": "2026-10-05T03:01:43.289440+00:00", "level": "INFO", "task_id": "47091b39-8e4f-4e33-b301-4d8f807e1144", "agent_name": "ResearchAgent", "action_details": "Tool execution successful."}
+{"timestamp": "2026-10-05T03:01:43.303284+00:00", "level": "INFO", "task_id": "47091b39-8e4f-4e33-b301-4d8f807e1144", "agent_name": "ResearchAgent", "action_details": "Research saved to scratchpad."}
+{"timestamp": "2026-10-05T03:01:43.307203+00:00", "level": "INFO", "task_id": "47091b39-8e4f-4e33-b301-4d8f807e1144", "agent_name": "WritingAgent", "action_details": "Starting draft generation."}
+{"timestamp": "2026-10-05T03:01:45.338466+00:00", "level": "INFO", "task_id": "47091b39-8e4f-4e33-b301-4d8f807e1144", "agent_name": "WritingAgent", "action_details": "Draft generated and saved to scratchpad."}
+{"timestamp": "2026-10-05T03:03:59.871545+00:00", "level": "INFO", "task_id": "47091b39-8e4f-4e33-b301-4d8f807e1144", "agent_name": "PublisherAgent", "action_details": "Human approval received. Publishing final result."}

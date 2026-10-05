@@ -52,3 +52,10 @@ def writing_agent(state: AgentState) -> dict:
     return {"status": "AWAITING_APPROVAL"}
 
 
+def publisher_agent(state: AgentState) -> dict:
+    task_id = state["task_id"]
+    log_agent_action(task_id, "PublisherAgent", "Human approval received. Publishing final result.")
+    
+    # In a real system, this would send an email or push to a live database.
+    # We just update the state to signal it is completely finished.
+    return {"status": "COMPLETED"}

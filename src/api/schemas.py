@@ -20,3 +20,11 @@ class TaskResponse(BaseModel):
     updated_at: datetime
 
     model_config= ConfigDict(from_attributes=True)
+
+class ApprovalRequest(BaseModel):
+    approved: bool
+    feedback: str
+
+class ApprovalResponse(BaseModel):
+    task_id: UUID
+    status: str
