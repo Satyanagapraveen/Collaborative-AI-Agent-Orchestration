@@ -2,14 +2,12 @@ import os
 import asyncio
 import json
 import redis
-from celery import Celery
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from src.worker.celery_app import celery_app
 from src.db.models import Task
-from sqlalchemy import select
 from src.agents.graph import agent_app
-from src.worker.celery_app import celery_app
 
 redis_client = redis.from_url(os.getenv("REDIS_URL"))
 
@@ -41,7 +39,9 @@ def run_agent_workflow(task_id: str, prompt: str):
                 "prompt": prompt,
                 "status": "RUNNING",
                 "human_approved": False,
-                "errors": []
+                "errors": [],
+                "feedback": "",
+                "agent_logs":[]
             }
             
             try:
@@ -51,6 +51,7 @@ def run_agent_workflow(task_id: str, prompt: str):
                 )
                 
                 task.status = final_state.get("status", "FAILED")
+                task.agent_logs = final_state.get("agent_logs", [])
                 if task.status == "FAILED":
                     task.result = f"Errors: {', '.join(final_state.get('errors', []))}"
                 
@@ -88,13 +89,15 @@ def resume_agent_workflow(task_id: str, approved: bool, feedback: str):
 
             # 1. Update the LangGraph state with the human's feedback
             config = {"configurable": {"thread_id": task_id}}
-            agent_app.update_state(
+            await agent_app.aupdate_state(
                 config,
                 {"human_approved": approved, "feedback": feedback}
             )
 
             # 2. Resume the graph (it will now run the publisher node)
             final_state = await agent_app.ainvoke(None, config)
+            
+            task.agent_logs = final_state.get("agent_logs", [])
 
             # 3. Extract the clean string from Redis and save to Postgres
             redis_key = f"task:{task_id}:workspace"

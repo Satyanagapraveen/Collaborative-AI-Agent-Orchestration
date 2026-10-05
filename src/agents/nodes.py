@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timezone
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.agents.state import AgentState
@@ -26,8 +27,7 @@ def research_agent(state:AgentState)->dict:
     write_to_scratchpad(task_id, {"research_data": research_data})
     log_agent_action(task_id, "ResearchAgent", "Research saved to scratchpad.")
     
-    return {}
-
+    return {"agent_logs": [{"agent": "ResearchAgent", "action": f"Searching for {prompt}", "timestamp": datetime.now(timezone.utc).isoformat()}]}
 def writing_agent(state: AgentState) -> dict:
     task_id = state["task_id"]
     log_agent_action(task_id, "WritingAgent", "Starting draft generation.")
@@ -49,7 +49,7 @@ def writing_agent(state: AgentState) -> dict:
     
     log_agent_action(task_id, "WritingAgent", "Draft generated and saved to scratchpad.")
     
-    return {"status": "AWAITING_APPROVAL"}
+    return {"status": "AWAITING_APPROVAL", "agent_logs": [{"agent": "WritingAgent", "action": "Drafting comparison summary", "timestamp": datetime.now(timezone.utc).isoformat()}]}
 
 
 def publisher_agent(state: AgentState) -> dict:
@@ -58,4 +58,4 @@ def publisher_agent(state: AgentState) -> dict:
     
     # In a real system, this would send an email or push to a live database.
     # We just update the state to signal it is completely finished.
-    return {"status": "COMPLETED"}
+    return {"status": "COMPLETED", "agent_logs": [{"agent": "PublisherAgent", "action": "Publishing final result", "timestamp": datetime.now(timezone.utc).isoformat()}]}

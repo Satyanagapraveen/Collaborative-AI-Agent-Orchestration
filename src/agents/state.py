@@ -1,4 +1,4 @@
-from typing import Annotated, List, TypedDict
+from typing import Annotated, List, TypedDict, Dict, Any
 import operator
 
 class AgentState(TypedDict):
@@ -8,3 +8,4 @@ class AgentState(TypedDict):
     human_approved: bool
     errors: Annotated[List[str],operator.add]
     feedback: str
+    agent_logs: Annotated[List[Dict[str, Any]], operator.add]

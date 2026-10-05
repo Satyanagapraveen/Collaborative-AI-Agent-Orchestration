@@ -1,20 +1,14 @@
 import os
 import redis
-import json
-import redis.asyncio as aioredis
-import asyncio
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from uuid import UUID
 
 from src.db.database import get_db
 from src.db.models import Task
-from src.api.schemas import TaskRequest, TaskResponse, TaskCreateResponse
-from src.worker.tasks import run_agent_workflow
-
-from src.api.schemas import ApprovalRequest, ApprovalResponse
-from src.worker.tasks import resume_agent_workflow
+from src.api.schemas import TaskRequest, TaskResponse, TaskCreateResponse, ApprovalRequest, ApprovalResponse
+from src.worker.tasks import run_agent_workflow, resume_agent_workflow
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["Tasks"])
 redis_client = redis.from_url(os.getenv("REDIS_URL"))
@@ -31,7 +25,7 @@ async def create_task(request:TaskRequest, db:AsyncSession=Depends(get_db)):
      # Dispatch to Celery
     run_agent_workflow.delay(str(new_task.id), request.prompt)
     
-    return new_task
+    return TaskCreateResponse(task_id=new_task.id, status=new_task.status)
 
 @router.get("/{task_id}",response_model=TaskResponse)
 async def get_task(task_id: UUID, db:AsyncSession=Depends(get_db)):
