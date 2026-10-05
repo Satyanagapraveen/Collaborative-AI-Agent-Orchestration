@@ -7,3 +7,4 @@ class AgentState(TypedDict):
     status: str
     human_approved: bool
     errors: Annotated[List[str],operator.add]
+    feedback: str

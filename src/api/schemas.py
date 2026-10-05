@@ -3,7 +3,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
-class AgentLogScheam(BaseModel):
+class AgentLogSchema(BaseModel):
     agent: str
     action: str
     timestamp: datetime
@@ -15,7 +15,7 @@ class TaskResponse(BaseModel):
     prompt: str
     status: str
     result: Optional[str]=None
-    agent_logs: Optional[List[AgentLogScheam]]=None
+    agent_logs: Optional[List[AgentLogSchema]]=None
     created_at: datetime
     updated_at: datetime
 
@@ -26,5 +26,9 @@ class ApprovalRequest(BaseModel):
     feedback: str
 
 class ApprovalResponse(BaseModel):
+    task_id: UUID
+    status: str
+
+class TaskCreateResponse(BaseModel):
     task_id: UUID
     status: str

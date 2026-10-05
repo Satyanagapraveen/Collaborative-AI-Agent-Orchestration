@@ -30,6 +30,14 @@ services:
      - "8000:8000"
    volumes:
      - .:/api
+   env_file:
+    - .env
+   healthcheck:
+     test: ["CMD","curl","-f","http://localhost:8000/health"]
+     interval: 5s
+     timeout: 5s
+     retries: 5
+
    depends_on:
      db:
       condition: service_healthy
