@@ -64,24 +64,30 @@ async def approve_task(task_id: UUID, approval: ApprovalRequest, db: AsyncSessio
     # 3. Return the exact response required by the spec
     return ApprovalResponse(task_id=task_id, status="RESUMED")
 
-@router.websocket("/ws/tasks/{task_id}")
-async def websocket_task_status(websocket:WebSocket, task_id:UUID):
+
+         
+@router.websocket("/{task_id}")
+async def websocket_task_status(websocket: WebSocket, task_id: UUID):
     await websocket.accept()
-    pubsub=aioredis.Redis.pubsub()
-    channel_name=f"task_updates{task_id}"
+    
+    pubsub = async_redis.pubsub()
+    channel_name = f"task_updates:{task_id}"
     await pubsub.subscribe(channel_name)
+    
     try:
         while True:
-            message=pubsub.get_message(ignore_subscribe_messages=True)
+            message = await pubsub.get_message(ignore_subscribe_messages=True)
             if message:
-                status_string=message["data"].decode("utf-8")
+                status_string = message["data"].decode("utf-8")
+                
+                # Send the exact JSON format required by the specification
                 await websocket.send_json({
                     "task_id": str(task_id),
                     "status": status_string
                 })
+                
             # Pause for 100 milliseconds to prevent CPU overload
             await asyncio.sleep(0.1)
-
+            
     except WebSocketDisconnect:
         await pubsub.unsubscribe(channel_name)
-         

@@ -1,5 +1,7 @@
 import os
 import asyncio
+import json
+import redis
 from celery import Celery
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -7,6 +9,9 @@ from src.worker.celery_app import celery_app
 from src.db.models import Task
 from sqlalchemy import select
 from src.agents.graph import agent_app
+from src.worker.celery_app import celery_app
+
+redis_client = redis.from_url(os.getenv("REDIS_URL"))
 
 @celery_app.task(name="run_agent_workflow")
 def run_agent_workflow(task_id: str, prompt: str):
@@ -26,6 +31,8 @@ def run_agent_workflow(task_id: str, prompt: str):
             
             task.status = "RUNNING"
             await session.commit()
+             # --- NEW: Broadcast the RUNNING status to the WebSocket ---
+            redis_client.publish(f"task_updates:{task_id}", "RUNNING")
             
             initial_state = {
                 "task_id": task_id,
@@ -46,23 +53,21 @@ def run_agent_workflow(task_id: str, prompt: str):
                     task.result = f"Errors: {', '.join(final_state.get('errors', []))}"
                 
                 await session.commit()
+                # --- NEW: Broadcast the paused/failed status to the WebSocket ---
+                redis_client.publish(f"task_updates:{task_id}", task.status)
                 
             except Exception as e:
                 task.status = "FAILED"
                 task.result = f"Fatal Orchestration Error: {str(e)}"
                 await session.commit()
+                # --- NEW: Broadcast the fatal error status ---
+                redis_client.publish(f"task_updates:{task_id}", "FAILED")
                 
             finally:
                 # 3. Cleanly dispose of the isolated engine when finished
                 await engine.dispose()
 
     asyncio.run(_execute_workflow())
-
-import json
-import redis
-from src.worker.celery_app import celery_app
-
-redis_client = redis.from_url(os.getenv("REDIS_URL"))
 
 @celery_app.task(name="resume_agent_workflow")
 def resume_agent_workflow(task_id: str, approved: bool, feedback: str):
@@ -75,6 +80,9 @@ def resume_agent_workflow(task_id: str, approved: bool, feedback: str):
             task = result.scalars().first()
             if not task:
                 return
+            # --- NEW: Broadcast that the system is processing the approval ---
+            redis_client.publish(f"task_updates:{task_id}", "RESUMED")
+
 
             # 1. Update the LangGraph state with the human's feedback
             config = {"configurable": {"thread_id": task_id}}
@@ -103,6 +111,8 @@ def resume_agent_workflow(task_id: str, approved: bool, feedback: str):
                 task.result = "Error: Workspace data expired."
 
             task.status = final_state.get("status", "COMPLETED")
+             # --- NEW: Broadcast the final completion status ---
+            redis_client.publish(f"task_updates:{task_id}", task.status)
             await session.commit()
             await engine.dispose()
 
