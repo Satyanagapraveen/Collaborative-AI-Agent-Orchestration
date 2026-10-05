@@ -58,16 +58,21 @@ async def approve_task(task_id: UUID, db: AsyncSession = Depends(get_db)):
     if workspace_data_raw:
         workspace_data = json.loads(workspace_data_raw)
         draft = workspace_data.get("draft", "No draft found in scratchpad.")
-        # 3. Save the draft permanently to the Postgres result column
+        
+        # --- NEW EXTRACTION LOGIC ---
+        if isinstance(draft, list):
+            # Extract the 'text' value from each dictionary in the list and join them
+            extracted_text = "".join([
+                item.get("text", "") for item in draft if isinstance(item, dict)
+            ])
+            draft = extracted_text
+        elif not isinstance(draft, str):
+            # Fallback: force any other weird data types into a string
+            draft = str(draft)
+        # ----------------------------
+        
+        # Now it is guaranteed to be a flat string, safe for PostgreSQL VARCHAR
         task.result = draft
     else:
         # Fallback if Redis data expired or went missing
         task.result = "Error: Workspace data expired or not found."
-
-    # 4. Mark as completed and save
-    task.status = "COMPLETED"
-    
-    await db.commit()
-    await db.refresh(task)
-    
-    return task
