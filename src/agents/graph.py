@@ -16,7 +16,14 @@ def check_research_status(state: AgentState):
         return END
     return "writer"
 
-workflow.add_conditional_edges("researcher", check_research_status)
+workflow.add_conditional_edges(
+    "researcher", 
+    check_research_status,
+    {
+        "writer": "writer",
+        END: END
+    }
+)
 workflow.add_edge("writer", "publisher") # Route writer to publisher
 workflow.add_edge("publisher", END)
 

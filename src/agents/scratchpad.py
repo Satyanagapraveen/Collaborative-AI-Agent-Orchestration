@@ -15,7 +15,7 @@ def write_to_scratchpad(task_id: str, data:dict):
     key=get_workspace_key(task_id)
     json_data=json.dumps(data)
     redis_client.set(key,json_data)
-    redis_client.expire(key, 86400)
+    redis_client.expire(key, 86400) #expire in 24 hours
 
 
 def read_from_scratchpad(task_id:str)->dict:
