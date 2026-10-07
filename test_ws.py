@@ -7,14 +7,14 @@ async def create_and_listen():
     print("Creating new task...")
     response = requests.post(
         "http://localhost:8000/api/v1/tasks",
-        json={"prompt": "Explain race conditions in computer science."}
+        json={"prompt": "Explain AI, AGI, RSI, ASI"}
     )
     task_data = response.json()
-    task_id = task_data["id"]
+    task_id = task_data["task_id"]
     print(f"Task created with ID: {task_id}")
 
     # 2. Instantly connect to the WebSocket bridge
-    uri = f"ws://localhost:8000/api/v1/tasks/{task_id}"
+    uri = f"ws://localhost:8000/ws/tasks/{task_id}"
     print(f"Connecting to {uri}...")
     
     try:

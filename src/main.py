@@ -38,14 +38,14 @@ async def websocket_task_status(websocket: WebSocket, task_id: UUID):
             message = await pubsub.get_message(ignore_subscribe_messages=True)
             if message:
                 status_string = message["data"].decode("utf-8")
-            if status_string in ("COMPLETED", "FAILED"):
-                await websocket.send_json({
-                    "task_id": str(task_id),
-                    "status": status_string
-                })
-                await pubsub.unsubscribe(channel_name)
-                await websocket.close()
-                return
+                if status_string in ("COMPLETED", "FAILED"):
+                    await websocket.send_json({
+                        "task_id": str(task_id),
+                        "status": status_string
+                    })
+                    await pubsub.unsubscribe(channel_name)
+                    await websocket.close()
+                    return
                 
             # Pause for 100 milliseconds to prevent CPU overload
             await asyncio.sleep(0.1)
